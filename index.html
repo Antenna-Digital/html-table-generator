@@ -65,6 +65,7 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
+            justify-content: flex-end;
         }
 
         .control-group label {
@@ -145,8 +146,8 @@
         }
 
         .editable-table th {
-            background: #007900;
-            color: white;
+            background: white;
+            color: #141210;
             font-weight: 600;
         }
 
@@ -165,12 +166,63 @@
             padding: 4px;
             font-size: 1rem;
             min-width: 120px;
+            resize: none;
+            min-height: 20px;
+            font-family: inherit;
         }
 
         .cell-input:focus {
             outline: 2px solid #007900;
             outline-offset: -2px;
             background: white;
+        }
+
+        .formatting-controls {
+            position: absolute;
+            top: -35px;
+            left: 0;
+            background: white;
+            border: 1px solid #007900;
+            border-radius: 4px;
+            padding: 5px;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .formatting-controls.active {
+            display: block;
+        }
+
+        .format-btn {
+            background: #f8f8f8;
+            border: 1px solid #e0e0e0;
+            padding: 5px 10px;
+            margin-right: 5px;
+            cursor: pointer;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .format-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .format-btn.active {
+            background: #007900;
+            color: white;
+        }
+
+        .cell-container {
+            position: relative;
+        }
+
+        .formatting-hint {
+            font-size: 0.7rem;
+            color: #666;
+            margin-top: 5px;
+            font-style: italic;
         }
 
         .output-section {
@@ -214,6 +266,18 @@
             flex-wrap: wrap;
         }
 
+        .ad-table {
+            display: block;
+            overflow-x: auto;
+            max-width: 100% !important;
+        }
+
+        .ad-table .has-fixed-layout {
+            table-layout: fixed;
+            width: 100%;
+            border-collapse: collapse;
+        }
+
         @media (max-width: 768px) {
             .controls {
                 grid-template-columns: 1fr;
@@ -254,6 +318,13 @@
                     </select>
                 </div>
                 <div class="control-group">
+                    <label for="fixedLayout">Fixed Layout:</label>
+                    <select id="fixedLayout">
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                    </select>
+                </div>
+                <div class="control-group">
                     <button class="btn btn-primary" onclick="generateTable()">Generate Table</button>
                 </div>
             </div>
@@ -273,6 +344,7 @@
 
             <div class="output-section">
                 <h2>Generated HTML Code:</h2>
+                <div class="formatting-hint">Tip: Use **text** to make text bold in your table cells</div>
                 <div class="code-output" id="htmlOutput"></div>
                 <button class="btn copy-btn" onclick="copyToClipboard()">Copy HTML Code</button>
             </div>
@@ -284,6 +356,7 @@
         let currentRows = 3;
         let currentCols = 3;
         let hasHeaders = true;
+        let fixedLayout = true;
 
         function initializeTable() {
             tableData = [];
@@ -303,6 +376,7 @@
             currentRows = parseInt(document.getElementById('rows').value);
             currentCols = parseInt(document.getElementById('cols').value);
             hasHeaders = document.getElementById('hasHeaders').value === 'true';
+            fixedLayout = document.getElementById('fixedLayout').value === 'true';
             
             initializeTable();
             renderTable();
@@ -313,21 +387,200 @@
             const table = document.getElementById('editableTable');
             table.innerHTML = '';
 
-            for (let i = 0; i < currentRows; i++) {
-                const row = table.insertRow();
+            // Create thead if headers are enabled
+            if (hasHeaders) {
+                const thead = table.createTHead();
+                const headerRow = thead.insertRow();
+                
                 for (let j = 0; j < currentCols; j++) {
-                    const cell = i === 0 && hasHeaders ? document.createElement('th') : document.createElement('td');
-                    const input = document.createElement('input');
-                    input.type = 'text';
+                    const cell = document.createElement('th');
+                    const cellContainer = document.createElement('div');
+                    cellContainer.className = 'cell-container';
+                    
+                    const input = document.createElement('textarea');
+                    input.className = 'cell-input';
+                    input.value = tableData[0][j];
+                    input.addEventListener('input', function() {
+                        tableData[0][j] = this.value;
+                        generateHTML();
+                    });
+                    
+                    // Add formatting controls
+                    const formatControls = document.createElement('div');
+                    formatControls.className = 'formatting-controls';
+                    
+                    const boldBtn = document.createElement('button');
+                    boldBtn.className = 'format-btn';
+                    boldBtn.textContent = 'B';
+                    boldBtn.title = 'Bold selected text';
+                    boldBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        formatSelectedText(input, 'bold');
+                        return false;
+                    });
+                    
+                    formatControls.appendChild(boldBtn);
+                    
+                    input.addEventListener('focus', function() {
+                        formatControls.classList.add('active');
+                        // Show textarea when editing
+                        this.style.display = 'block';
+                        const displayDiv = this.parentNode.querySelector('.cell-display');
+                        if (displayDiv) displayDiv.style.display = 'none';
+                    });
+                    
+                    input.addEventListener('blur', function() {
+                        setTimeout(() => {
+                            formatControls.classList.remove('active');
+                            updateCellDisplay(this);
+                        }, 300);
+                    });
+                    
+                    // Create display div for rendered content
+                    const displayDiv = document.createElement('div');
+                    displayDiv.className = 'cell-display';
+                    displayDiv.style.cssText = 'padding: 4px; min-height: 20px; cursor: text; min-width: 120px;';
+                    displayDiv.addEventListener('click', function() {
+                        // Show textarea and hide display
+                        input.style.display = 'block';
+                        this.style.display = 'none';
+                        input.focus();
+                    });
+                    
+                    cellContainer.appendChild(formatControls);
+                    cellContainer.appendChild(input);
+                    cellContainer.appendChild(displayDiv);
+                    cell.appendChild(cellContainer);
+                    headerRow.appendChild(cell);
+                    
+                    // Initialize display
+                    updateCellDisplay(input);
+                }
+            }
+
+            // Create tbody
+            const tbody = table.createTBody();
+            const startRow = hasHeaders ? 1 : 0;
+            
+            for (let i = startRow; i < currentRows; i++) {
+                const row = tbody.insertRow();
+                for (let j = 0; j < currentCols; j++) {
+                    const cell = document.createElement('td');
+                    const cellContainer = document.createElement('div');
+                    cellContainer.className = 'cell-container';
+                    
+                    const input = document.createElement('textarea');
                     input.className = 'cell-input';
                     input.value = tableData[i][j];
                     input.addEventListener('input', function() {
                         tableData[i][j] = this.value;
                         generateHTML();
                     });
-                    cell.appendChild(input);
+                    
+                    // Add formatting controls
+                    const formatControls = document.createElement('div');
+                    formatControls.className = 'formatting-controls';
+                    
+                    const boldBtn = document.createElement('button');
+                    boldBtn.className = 'format-btn';
+                    boldBtn.textContent = 'B';
+                    boldBtn.title = 'Bold selected text';
+                    boldBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        formatSelectedText(input, 'bold');
+                        return false;
+                    });
+                    
+                    formatControls.appendChild(boldBtn);
+                    
+                    input.addEventListener('focus', function() {
+                        formatControls.classList.add('active');
+                        // Show textarea when editing
+                        this.style.display = 'block';
+                        const displayDiv = this.parentNode.querySelector('.cell-display');
+                        if (displayDiv) displayDiv.style.display = 'none';
+                    });
+                    
+                    input.addEventListener('blur', function() {
+                        setTimeout(() => {
+                            formatControls.classList.remove('active');
+                            updateCellDisplay(this);
+                        }, 300);
+                    });
+                    
+                    // Create display div for rendered content
+                    const displayDiv = document.createElement('div');
+                    displayDiv.className = 'cell-display';
+                    displayDiv.style.cssText = 'padding: 4px; min-height: 20px; cursor: text; min-width: 120px;';
+                    displayDiv.addEventListener('click', function() {
+                        // Show textarea and hide display
+                        input.style.display = 'block';
+                        this.style.display = 'none';
+                        input.focus();
+                    });
+                    
+                    cellContainer.appendChild(formatControls);
+                    cellContainer.appendChild(input);
+                    cellContainer.appendChild(displayDiv);
+                    cell.appendChild(cellContainer);
                     row.appendChild(cell);
+                    
+                    // Initialize display
+                    updateCellDisplay(input);
                 }
+            }
+        }
+
+        function updateCellDisplay(textarea) {
+            const displayDiv = textarea.parentNode.querySelector('.cell-display');
+            if (displayDiv) {
+                const content = textarea.value || '';
+                const processedContent = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                displayDiv.innerHTML = processedContent || '&nbsp;';
+                
+                // Hide textarea, show display only when not focused
+                if (document.activeElement !== textarea) {
+                    textarea.style.display = 'none';
+                    displayDiv.style.display = 'block';
+                }
+            }
+        }
+
+        function formatSelectedText(textarea, format) {
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const selectedText = textarea.value.substring(start, end);
+            
+            if (selectedText) {
+                let formattedText = selectedText;
+                
+                if (format === 'bold') {
+                    // Check if already bold
+                    if (selectedText.startsWith('**') && selectedText.endsWith('**')) {
+                        formattedText = selectedText.slice(2, -2);
+                    } else {
+                        formattedText = `**${selectedText}**`;
+                    }
+                }
+                
+                const newValue = textarea.value.substring(0, start) + formattedText + textarea.value.substring(end);
+                textarea.value = newValue;
+                
+                // Update table data
+                const rowIndex = Array.from(textarea.closest('tr').parentNode.children).indexOf(textarea.closest('tr'));
+                const cellIndex = Array.from(textarea.closest('tr').children).indexOf(textarea.closest('td, th'));
+                tableData[rowIndex][cellIndex] = newValue;
+                
+                // Regenerate HTML
+                generateHTML();
+                
+                // Keep focus on the textarea
+                setTimeout(() => {
+                    textarea.focus();
+                    textarea.setSelectionRange(start, start + formattedText.length);
+                }, 10);
             }
         }
 
@@ -376,19 +629,43 @@
         }
 
         function generateHTML() {
-            let html = '<table>\n';
+            let html = '<figure class="ad-table">\n';
             
-            for (let i = 0; i < currentRows; i++) {
-                html += '  <tr>\n';
-                for (let j = 0; j < currentCols; j++) {
-                    const tag = i === 0 && hasHeaders ? 'th' : 'td';
-                    const content = tableData[i][j] || '';
-                    html += `    <${tag}>${content}</${tag}>\n`;
-                }
-                html += '  </tr>\n';
+            if (fixedLayout) {
+                html += '  <table class="has-fixed-layout">\n';
+            } else {
+                html += '  <table>\n';
             }
             
-            html += '</table>';
+            // Add thead if headers are enabled
+            if (hasHeaders) {
+                html += '    <thead>\n';
+                html += '      <tr>\n';
+                for (let j = 0; j < currentCols; j++) {
+                    const content = tableData[0][j] || '';
+                    const processedContent = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    html += `        <th>${processedContent}</th>\n`;
+                }
+                html += '      </tr>\n';
+                html += '    </thead>\n';
+            }
+            
+            // Add tbody
+            html += '    <tbody>\n';
+            const startRow = hasHeaders ? 1 : 0;
+            for (let i = startRow; i < currentRows; i++) {
+                html += '      <tr>\n';
+                for (let j = 0; j < currentCols; j++) {
+                    const content = tableData[i][j] || '';
+                    const processedContent = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    html += `        <td>${processedContent}</td>\n`;
+                }
+                html += '      </tr>\n';
+            }
+            html += '    </tbody>\n';
+            
+            html += '  </table>\n';
+            html += '</figure>';
             
             document.getElementById('htmlOutput').textContent = html;
         }

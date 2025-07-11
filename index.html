@@ -225,6 +225,63 @@
             font-style: italic;
         }
 
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 280px;
+            background-color: #141210;
+            color: #f2e9df;
+            text-align: left;
+            border-radius: 6px;
+            padding: 12px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -140px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.8rem;
+            line-height: 1.4;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #141210 transparent transparent transparent;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .info-icon {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            background: #b4904e;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: bold;
+            line-height: 16px;
+            margin-left: 5px;
+            vertical-align: middle;
+        }
+
         .output-section {
             margin-top: 40px;
         }
@@ -318,7 +375,16 @@
                     </select>
                 </div>
                 <div class="control-group">
-                    <label for="fixedLayout">Fixed Layout:</label>
+                    <label for="fixedLayout">
+                        Fixed Layout:
+                        <div class="tooltip">
+                            <span class="info-icon">?</span>
+                            <span class="tooltiptext">
+                                <strong>Fixed Layout (Yes):</strong> Columns maintain equal widths regardless of content length. Creates consistent, professional-looking tables.<br><br>
+                                <strong>Auto Layout (No):</strong> Columns automatically adjust to fit their content. Better for varied content lengths but less predictable.
+                            </span>
+                        </div>
+                    </label>
                     <select id="fixedLayout">
                         <option value="true">Yes</option>
                         <option value="false">No</option>
@@ -366,7 +432,9 @@
                     if (i === 0 && hasHeaders) {
                         tableData[i][j] = `Header ${j + 1}`;
                     } else {
-                        tableData[i][j] = `Cell ${i + 1}-${j + 1}`;
+                        // For tbody cells, use a consistent 1-based numbering
+                        const bodyRowIndex = hasHeaders ? i : i + 1;
+                        tableData[i][j] = `Cell ${bodyRowIndex}-${j + 1}`;
                     }
                 }
             }
@@ -568,9 +636,29 @@
                 const newValue = textarea.value.substring(0, start) + formattedText + textarea.value.substring(end);
                 textarea.value = newValue;
                 
-                // Update table data
-                const rowIndex = Array.from(textarea.closest('tr').parentNode.children).indexOf(textarea.closest('tr'));
-                const cellIndex = Array.from(textarea.closest('tr').children).indexOf(textarea.closest('td, th'));
+                // Update table data - need to find the correct row/cell indices
+                const cell = textarea.closest('td, th');
+                const row = textarea.closest('tr');
+                const table = textarea.closest('table');
+                
+                let rowIndex, cellIndex;
+                
+                // Check if we're in thead or tbody
+                if (cell.tagName === 'TH') {
+                    // We're in a header row
+                    rowIndex = 0;
+                    cellIndex = Array.from(row.children).indexOf(cell);
+                } else {
+                    // We're in tbody
+                    const tbody = textarea.closest('tbody');
+                    const tbodyRows = Array.from(tbody.children);
+                    const tbodyRowIndex = tbodyRows.indexOf(row);
+                    
+                    // Add 1 to account for header row if it exists
+                    rowIndex = hasHeaders ? tbodyRowIndex + 1 : tbodyRowIndex;
+                    cellIndex = Array.from(row.children).indexOf(cell);
+                }
+                
                 tableData[rowIndex][cellIndex] = newValue;
                 
                 // Regenerate HTML
@@ -586,7 +674,12 @@
 
         function addRow() {
             currentRows++;
-            tableData.push(new Array(currentCols).fill('').map((_, j) => `Cell ${currentRows}-${j + 1}`));
+            const newRowData = [];
+            for (let j = 0; j < currentCols; j++) {
+                const bodyRowIndex = hasHeaders ? currentRows - 1 : currentRows;
+                newRowData.push(`Cell ${bodyRowIndex}-${j + 1}`);
+            }
+            tableData.push(newRowData);
             document.getElementById('rows').value = currentRows;
             renderTable();
             generateHTML();
@@ -598,7 +691,8 @@
                 if (i === 0 && hasHeaders) {
                     tableData[i].push(`Header ${currentCols}`);
                 } else {
-                    tableData[i].push(`Cell ${i + 1}-${currentCols}`);
+                    const bodyRowIndex = hasHeaders ? i : i + 1;
+                    tableData[i].push(`Cell ${bodyRowIndex}-${currentCols}`);
                 }
             }
             document.getElementById('cols').value = currentCols;

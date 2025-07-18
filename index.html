@@ -310,21 +310,42 @@
         e.preventDefault();
         e.stopPropagation();
         const cell = input.closest('td, th');
+        // Find cell indices
+        const row = input.closest('tr');
+        const table = input.closest('table');
+        let rowIndex, cellIndex;
+        if (cell.tagName === 'TH') {
+          rowIndex = 0;
+          cellIndex = Array.from(row.children).indexOf(cell);
+        } else {
+          const tbody = input.closest('tbody');
+          const tbodyRows = Array.from(tbody.children);
+          const tbodyRowIndex = tbodyRows.indexOf(row);
+          rowIndex = hasHeaders ? tbodyRowIndex + 1 : tbodyRowIndex;
+          cellIndex = Array.from(row.children).indexOf(cell);
+        }
+        // Toggle class on cell and in tableData
         if (cell.classList.contains('h-center')) {
           cell.classList.remove('h-center');
           hCenterBtn.classList.remove('bg-accent');
           hCenterBtn.classList.remove('text-white');
           hCenterBtn.querySelector('svg').classList.remove('text-white');
           hCenterBtn.style.backgroundColor = '';
+          if (!tableData[rowIndex][cellIndex + '_classes']) tableData[rowIndex][cellIndex + '_classes'] = '';
+          tableData[rowIndex][cellIndex + '_classes'] = (tableData[rowIndex][cellIndex + '_classes'] || '').replace('h-center', '').trim();
         } else {
           cell.classList.add('h-center');
           hCenterBtn.classList.add('bg-accent');
           hCenterBtn.classList.add('text-white');
           hCenterBtn.querySelector('svg').classList.add('text-white');
           hCenterBtn.style.backgroundColor = '#2563eb';
+          if (!tableData[rowIndex][cellIndex + '_classes']) tableData[rowIndex][cellIndex + '_classes'] = '';
+          if (!tableData[rowIndex][cellIndex + '_classes'].includes('h-center')) tableData[rowIndex][cellIndex + '_classes'] += ' h-center';
+          tableData[rowIndex][cellIndex + '_classes'] = tableData[rowIndex][cellIndex + '_classes'].trim();
         }
         isFormattingClick = false;
         input.focus();
+        generateHTML();
       });
       formatControls.appendChild(hCenterBtn);
 
@@ -338,21 +359,42 @@
         e.preventDefault();
         e.stopPropagation();
         const cell = input.closest('td, th');
+        // Find cell indices
+        const row = input.closest('tr');
+        const table = input.closest('table');
+        let rowIndex, cellIndex;
+        if (cell.tagName === 'TH') {
+          rowIndex = 0;
+          cellIndex = Array.from(row.children).indexOf(cell);
+        } else {
+          const tbody = input.closest('tbody');
+          const tbodyRows = Array.from(tbody.children);
+          const tbodyRowIndex = tbodyRows.indexOf(row);
+          rowIndex = hasHeaders ? tbodyRowIndex + 1 : tbodyRowIndex;
+          cellIndex = Array.from(row.children).indexOf(cell);
+        }
+        // Toggle class on cell and in tableData
         if (cell.classList.contains('v-center')) {
           cell.classList.remove('v-center');
           vCenterBtn.classList.remove('bg-accent');
           vCenterBtn.classList.remove('text-white');
           vCenterBtn.querySelector('svg').classList.remove('text-white');
           vCenterBtn.style.backgroundColor = '';
+          if (!tableData[rowIndex][cellIndex + '_classes']) tableData[rowIndex][cellIndex + '_classes'] = '';
+          tableData[rowIndex][cellIndex + '_classes'] = (tableData[rowIndex][cellIndex + '_classes'] || '').replace('v-center', '').trim();
         } else {
           cell.classList.add('v-center');
           vCenterBtn.classList.add('bg-accent');
           vCenterBtn.classList.add('text-white');
           vCenterBtn.querySelector('svg').classList.add('text-white');
           vCenterBtn.style.backgroundColor = '#2563eb';
+          if (!tableData[rowIndex][cellIndex + '_classes']) tableData[rowIndex][cellIndex + '_classes'] = '';
+          if (!tableData[rowIndex][cellIndex + '_classes'].includes('v-center')) tableData[rowIndex][cellIndex + '_classes'] += ' v-center';
+          tableData[rowIndex][cellIndex + '_classes'] = tableData[rowIndex][cellIndex + '_classes'].trim();
         }
         isFormattingClick = false;
         input.focus();
+        generateHTML();
       });
       formatControls.appendChild(vCenterBtn);
 
@@ -516,7 +558,9 @@
         for (let j = 0; j < currentCols; j++) {
           const content = tableData[0][j] || '';
           const processedContent = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-          html += `        <th>${processedContent}</th>\n`;
+          // Get alignment classes from tableData
+          let thClass = (tableData[0][j + '_classes'] || '').trim();
+          html += `        <th${thClass ? ` class=\"${thClass}\"` : ''}>${processedContent}</th>\n`;
         }
         html += '      </tr>\n    </thead>\n';
       }
@@ -528,7 +572,9 @@
         for (let j = 0; j < currentCols; j++) {
           const content = tableData[i][j] || '';
           const processedContent = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-          html += `        <td>${processedContent}</td>\n`;
+          // Get alignment classes from tableData
+          let tdClass = (tableData[i][j + '_classes'] || '').trim();
+          html += `        <td${tdClass ? ` class=\"${tdClass}\"` : ''}>${processedContent}</td>\n`;
         }
         html += '      </tr>\n';
       }

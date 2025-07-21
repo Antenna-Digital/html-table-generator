@@ -40,6 +40,20 @@
       .v-center {
         vertical-align: middle !important;
       }
+      /* Global horizontal center: all cells centered unless cell also has h-center, which inverts to left */
+      .h-center-all th, .h-center-all td {
+        text-align: center !important;
+      }
+      .h-center-all th.h-center, .h-center-all td.h-center {
+        text-align: left !important;
+      }
+      /* Global vertical center: all cells middle unless cell also has v-center, which inverts to top */
+      .v-center-all th, .v-center-all td {
+        vertical-align: middle !important;
+      }
+      .v-center-all th.v-center, .v-center-all td.v-center {
+        vertical-align: top !important;
+      }
     </style>
     <!-- Inter font for modern, readable UI -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
@@ -92,6 +106,17 @@
               <option value="false">No</option>
             </select>
           </div>
+        </div>
+        <!-- Global Alignment Controls -->
+        <div class="flex flex-wrap gap-6 mb-8 items-center justify-center">
+          <label class="flex items-center gap-2 font-semibold text-gray-700">
+            <input type="checkbox" id="globalHCenter" class="accent-accent w-5 h-5">
+            Horizontal Center All Cells
+          </label>
+          <label class="flex items-center gap-2 font-semibold text-gray-700">
+            <input type="checkbox" id="globalVCenter" class="accent-accent w-5 h-5">
+            Vertical Center All Cells
+          </label>
         </div>
 
         <!-- Import/Generate Table Controls -->
@@ -163,6 +188,9 @@
     let currentCols = 3;
     let hasHeaders = true;
     let fixedLayout = true;
+    // Global alignment state
+    let globalHCenter = false;
+    let globalVCenter = false;
     // Track if a formatting button is being clicked (for robust popup UX)
     let isFormattingClick = false;
 
@@ -189,6 +217,8 @@
       currentCols = parseInt(document.getElementById('cols').value);
       hasHeaders = document.getElementById('hasHeaders').value === 'true';
       fixedLayout = document.getElementById('fixedLayout').value === 'true';
+      globalHCenter = document.getElementById('globalHCenter').checked;
+      globalVCenter = document.getElementById('globalVCenter').checked;
       initializeTable();
       renderTable();
       generateHTML();
@@ -198,14 +228,19 @@
     function renderTable() {
       const table = document.getElementById('editableTable');
       table.innerHTML = '';
-
+      // Set global alignment classes on table
+      table.classList.toggle('h-center-all', globalHCenter);
+      table.classList.toggle('v-center-all', globalVCenter);
       // --- Render Table Headers (if enabled) ---
       if (hasHeaders) {
         const thead = table.createTHead();
         const headerRow = thead.insertRow();
         for (let j = 0; j < currentCols; j++) {
           const cell = document.createElement('th');
-          cell.className = 'bg-white text-gray-900 font-bold border border-gray-300 p-3 text-base text-left';
+          let thClass = 'bg-white text-gray-900 font-bold border border-gray-300 p-3 text-base text-left';
+          // Per-cell classes only
+          if (tableData[0][j + '_classes']) thClass += ' ' + tableData[0][j + '_classes'];
+          cell.className = thClass;
           const cellContainer = document.createElement('div');
           cellContainer.className = 'relative';
 
@@ -219,7 +254,7 @@
           });
 
           // --- Formatting Controls Popup ---
-          const formatControls = createFormattingControls(input);
+          const formatControls = createFormattingControls(input, 0, j);
           cellContainer.appendChild(formatControls);
           cellContainer.appendChild(input);
 
@@ -245,7 +280,10 @@
         const row = tbody.insertRow();
         for (let j = 0; j < currentCols; j++) {
           const cell = document.createElement('td');
-          cell.className = 'bg-white border border-gray-200 p-3 text-base text-left';
+          let tdClass = 'bg-white border border-gray-200 p-3 text-base text-left';
+          // Per-cell classes only
+          if (tableData[i][j + '_classes']) tdClass += ' ' + tableData[i][j + '_classes'];
+          cell.className = tdClass;
           const cellContainer = document.createElement('div');
           cellContainer.className = 'relative';
 
@@ -259,7 +297,7 @@
           });
 
           // --- Formatting Controls Popup ---
-          const formatControls = createFormattingControls(input);
+          const formatControls = createFormattingControls(input, i, j);
           cellContainer.appendChild(formatControls);
           cellContainer.appendChild(input);
 
@@ -280,7 +318,7 @@
     }
 
     // --- Create Formatting Controls Popup (Bold, h-center, v-center) ---
-    function createFormattingControls(input) {
+    function createFormattingControls(input, rowIndex, cellIndex) {
       const formatControls = document.createElement('div');
       formatControls.className = 'absolute top-[-44px] left-0 bg-white border border-accent rounded p-2 hidden z-10 shadow-lg flex gap-2';
 
@@ -310,20 +348,9 @@
         e.preventDefault();
         e.stopPropagation();
         const cell = input.closest('td, th');
-        // Find cell indices
         const row = input.closest('tr');
         const table = input.closest('table');
-        let rowIndex, cellIndex;
-        if (cell.tagName === 'TH') {
-          rowIndex = 0;
-          cellIndex = Array.from(row.children).indexOf(cell);
-        } else {
-          const tbody = input.closest('tbody');
-          const tbodyRows = Array.from(tbody.children);
-          const tbodyRowIndex = tbodyRows.indexOf(row);
-          rowIndex = hasHeaders ? tbodyRowIndex + 1 : tbodyRowIndex;
-          cellIndex = Array.from(row.children).indexOf(cell);
-        }
+        let rIdx = rowIndex, cIdx = cellIndex;
         // Toggle class on cell and in tableData
         if (cell.classList.contains('h-center')) {
           cell.classList.remove('h-center');
@@ -331,17 +358,17 @@
           hCenterBtn.classList.remove('text-white');
           hCenterBtn.querySelector('svg').classList.remove('text-white');
           hCenterBtn.style.backgroundColor = '';
-          if (!tableData[rowIndex][cellIndex + '_classes']) tableData[rowIndex][cellIndex + '_classes'] = '';
-          tableData[rowIndex][cellIndex + '_classes'] = (tableData[rowIndex][cellIndex + '_classes'] || '').replace('h-center', '').trim();
+          if (!tableData[rIdx][cIdx + '_classes']) tableData[rIdx][cIdx + '_classes'] = '';
+          tableData[rIdx][cIdx + '_classes'] = (tableData[rIdx][cIdx + '_classes'] || '').replace('h-center', '').trim();
         } else {
           cell.classList.add('h-center');
           hCenterBtn.classList.add('bg-accent');
           hCenterBtn.classList.add('text-white');
           hCenterBtn.querySelector('svg').classList.add('text-white');
           hCenterBtn.style.backgroundColor = '#2563eb';
-          if (!tableData[rowIndex][cellIndex + '_classes']) tableData[rowIndex][cellIndex + '_classes'] = '';
-          if (!tableData[rowIndex][cellIndex + '_classes'].includes('h-center')) tableData[rowIndex][cellIndex + '_classes'] += ' h-center';
-          tableData[rowIndex][cellIndex + '_classes'] = tableData[rowIndex][cellIndex + '_classes'].trim();
+          if (!tableData[rIdx][cIdx + '_classes']) tableData[rIdx][cIdx + '_classes'] = '';
+          if (!tableData[rIdx][cIdx + '_classes'].includes('h-center')) tableData[rIdx][cIdx + '_classes'] += ' h-center';
+          tableData[rIdx][cIdx + '_classes'] = tableData[rIdx][cIdx + '_classes'].trim();
         }
         isFormattingClick = false;
         input.focus();
@@ -359,20 +386,9 @@
         e.preventDefault();
         e.stopPropagation();
         const cell = input.closest('td, th');
-        // Find cell indices
         const row = input.closest('tr');
         const table = input.closest('table');
-        let rowIndex, cellIndex;
-        if (cell.tagName === 'TH') {
-          rowIndex = 0;
-          cellIndex = Array.from(row.children).indexOf(cell);
-        } else {
-          const tbody = input.closest('tbody');
-          const tbodyRows = Array.from(tbody.children);
-          const tbodyRowIndex = tbodyRows.indexOf(row);
-          rowIndex = hasHeaders ? tbodyRowIndex + 1 : tbodyRowIndex;
-          cellIndex = Array.from(row.children).indexOf(cell);
-        }
+        let rIdx = rowIndex, cIdx = cellIndex;
         // Toggle class on cell and in tableData
         if (cell.classList.contains('v-center')) {
           cell.classList.remove('v-center');
@@ -380,17 +396,17 @@
           vCenterBtn.classList.remove('text-white');
           vCenterBtn.querySelector('svg').classList.remove('text-white');
           vCenterBtn.style.backgroundColor = '';
-          if (!tableData[rowIndex][cellIndex + '_classes']) tableData[rowIndex][cellIndex + '_classes'] = '';
-          tableData[rowIndex][cellIndex + '_classes'] = (tableData[rowIndex][cellIndex + '_classes'] || '').replace('v-center', '').trim();
+          if (!tableData[rIdx][cIdx + '_classes']) tableData[rIdx][cIdx + '_classes'] = '';
+          tableData[rIdx][cIdx + '_classes'] = (tableData[rIdx][cIdx + '_classes'] || '').replace('v-center', '').trim();
         } else {
           cell.classList.add('v-center');
           vCenterBtn.classList.add('bg-accent');
           vCenterBtn.classList.add('text-white');
           vCenterBtn.querySelector('svg').classList.add('text-white');
           vCenterBtn.style.backgroundColor = '#2563eb';
-          if (!tableData[rowIndex][cellIndex + '_classes']) tableData[rowIndex][cellIndex + '_classes'] = '';
-          if (!tableData[rowIndex][cellIndex + '_classes'].includes('v-center')) tableData[rowIndex][cellIndex + '_classes'] += ' v-center';
-          tableData[rowIndex][cellIndex + '_classes'] = tableData[rowIndex][cellIndex + '_classes'].trim();
+          if (!tableData[rIdx][cIdx + '_classes']) tableData[rIdx][cIdx + '_classes'] = '';
+          if (!tableData[rIdx][cIdx + '_classes'].includes('v-center')) tableData[rIdx][cIdx + '_classes'] += ' v-center';
+          tableData[rIdx][cIdx + '_classes'] = tableData[rIdx][cIdx + '_classes'].trim();
         }
         isFormattingClick = false;
         input.focus();
@@ -551,14 +567,20 @@
     // --- Generate HTML Output for Table ---
     function generateHTML() {
       let html = '<figure class="ad-table">\n';
-      html += fixedLayout ? '  <table class="has-fixed-layout">\n' : '  <table>\n';
+      // Compose table class string
+      let tableClass = '';
+      if (fixedLayout) tableClass += 'has-fixed-layout ';
+      if (globalHCenter) tableClass += 'h-center-all ';
+      if (globalVCenter) tableClass += 'v-center-all ';
+      tableClass = tableClass.trim();
+      html += `  <table${tableClass ? ` class=\"${tableClass}\"` : ''}>\n`;
       // Table headers
       if (hasHeaders) {
         html += '    <thead>\n      <tr>\n';
         for (let j = 0; j < currentCols; j++) {
           const content = tableData[0][j] || '';
           const processedContent = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-          // Get alignment classes from tableData
+          // Only per-cell classes
           let thClass = (tableData[0][j + '_classes'] || '').trim();
           html += `        <th${thClass ? ` class=\"${thClass}\"` : ''}>${processedContent}</th>\n`;
         }
@@ -572,7 +594,7 @@
         for (let j = 0; j < currentCols; j++) {
           const content = tableData[i][j] || '';
           const processedContent = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-          // Get alignment classes from tableData
+          // Only per-cell classes
           let tdClass = (tableData[i][j + '_classes'] || '').trim();
           html += `        <td${tdClass ? ` class=\"${tdClass}\"` : ''}>${processedContent}</td>\n`;
         }
@@ -686,6 +708,17 @@
 
     // --- Initialize the table on page load ---
     window.addEventListener('load', function() {
+      // Set up global alignment listeners
+      document.getElementById('globalHCenter').addEventListener('change', function() {
+        globalHCenter = this.checked;
+        renderTable();
+        generateHTML();
+      });
+      document.getElementById('globalVCenter').addEventListener('change', function() {
+        globalVCenter = this.checked;
+        renderTable();
+        generateHTML();
+      });
       generateTable();
     });
   </script>
